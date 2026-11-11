@@ -16,11 +16,14 @@ const COLUMNS = [
 
 let tasks = []
 let sortables = []
+let editingId = null
+const filters = { q: '', priority: '' }
 
-const boardEl = document.querySelector('#board')
-const toastEl = document.querySelector('#toast')
-const dialog = document.querySelector('#taskDialog')
-const form = document.querySelector('#taskForm')
+const $ = (sel) => document.querySelector(sel)
+const boardEl = $('#board')
+const toastEl = $('#toast')
+const dialog = $('#taskDialog')
+const form = $('#taskForm')
 
 function toast(msg) {
   toastEl.textContent = msg
@@ -41,21 +44,34 @@ async function loadTasks() {
   tasks = data
 }
 
+// ---- Due dates ----
+function dueState(t) {
+  if (!t.due_date || t.status === 'done') return ''
+  const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD, local time
+  if (t.due_date < today) return 'overdue'
+  const soon = new Date()
+  soon.setDate(soon.getDate() + 2)
+  if (t.due_date <= soon.toLocaleDateString('en-CA')) return 'soon'
+  return ''
+}
+
+// ---- Cards ----
 function cardEl(t) {
-  const el = document.createElement('div')
-  el.className = 'card'
-  el.dataset.id = t.id
+  const card = document.createElement('div')
+  card.className = 'card'
+  card.dataset.id = t.id
+  card.onclick = () => openEdit(t.id)
 
   const title = document.createElement('div')
   title.className = 'title'
   title.textContent = t.title
-  el.append(title)
+  card.append(title)
 
   if (t.description) {
     const d = document.createElement('div')
     d.className = 'desc'
     d.textContent = t.description
-    el.append(d)
+    card.append(d)
   }
 
   const meta = document.createElement('div')
@@ -65,14 +81,44 @@ function cardEl(t) {
   badge.textContent = t.priority
   meta.append(badge)
   if (t.due_date) {
+    const state = dueState(t)
     const due = document.createElement('span')
-    due.textContent = 'Due ' + t.due_date
+    due.className = 'due ' + state
+    due.textContent =
+      (state === 'overdue' ? 'Overdue · ' : state === 'soon' ? 'Due soon · ' : 'Due ') +
+      t.due_date
     meta.append(due)
   }
-  el.append(meta)
-  return el
+  card.append(meta)
+  return card
 }
 
+// ---- Filters and stats ----
+function matches(t) {
+  if (filters.priority && t.priority !== filters.priority) return false
+  if (filters.q) {
+    const q = filters.q.toLowerCase()
+    return (
+      t.title.toLowerCase().includes(q) ||
+      (t.description || '').toLowerCase().includes(q)
+    )
+  }
+  return true
+}
+
+function renderStats() {
+  const total = tasks.length
+  const done = tasks.filter((t) => t.status === 'done').length
+  const overdue = tasks.filter((t) => dueState(t) === 'overdue').length
+  const stat = (n, label, cls = '') =>
+    `<div class="stat ${cls}"><b>${n}</b>${label}</div>`
+  $('#stats').innerHTML =
+    stat(total, 'total') +
+    stat(done, 'completed') +
+    stat(overdue, 'overdue', overdue ? 'warn' : '')
+}
+
+// ---- Board ----
 function render() {
   sortables.forEach((s) => s.destroy())
   sortables = []
@@ -80,7 +126,7 @@ function render() {
 
   for (const col of COLUMNS) {
     const items = tasks
-      .filter((t) => t.status === col.id)
+      .filter((t) => t.status === col.id && matches(t))
       .sort((a, b) => a.position - b.position)
 
     const section = document.createElement('section')
@@ -109,14 +155,15 @@ function render() {
       })
     )
   }
+  renderStats()
 }
 
 async function onDrop(evt) {
   const id = evt.item.dataset.id
   const newStatus = evt.to.dataset.status
-  const siblings = [...evt.to.children].filter((el) => el.dataset.id)
-  const i = siblings.findIndex((el) => el.dataset.id === id)
-  const pos = (el) => tasks.find((t) => t.id === el.dataset.id).position
+  const siblings = [...evt.to.children].filter((node) => node.dataset.id)
+  const i = siblings.findIndex((node) => node.dataset.id === id)
+  const pos = (node) => tasks.find((t) => t.id === node.dataset.id).position
   const prev = siblings[i - 1]
   const next = siblings[i + 1]
 
@@ -144,44 +191,92 @@ async function onDrop(evt) {
   }
 }
 
-// ---- New task dialog ----
-document.querySelector('#newTaskBtn').onclick = () => {
+// ---- Task dialog (create + edit) ----
+function openCreate() {
+  editingId = null
   form.reset()
+  $('#dialogTitle').textContent = 'New task'
+  $('#saveBtn').textContent = 'Create'
+  $('#deleteBtn').hidden = true
   dialog.showModal()
-  document.querySelector('#fTitle').focus()
+  $('#fTitle').focus()
 }
-document.querySelector('#cancelBtn').onclick = () => dialog.close()
+
+function openEdit(id) {
+  const t = tasks.find((x) => x.id === id)
+  if (!t) return
+  editingId = id
+  $('#fTitle').value = t.title
+  $('#fDesc').value = t.description || ''
+  $('#fPriority').value = t.priority
+  $('#fDue').value = t.due_date || ''
+  $('#dialogTitle').textContent = 'Edit task'
+  $('#saveBtn').textContent = 'Save'
+  $('#deleteBtn').hidden = false
+  dialog.showModal()
+}
+
+$('#newTaskBtn').onclick = openCreate
+$('#cancelBtn').onclick = () => dialog.close()
+
+$('#deleteBtn').onclick = async () => {
+  if (!editingId || !confirm('Delete this task?')) return
+  const { error } = await supabase.from('tasks').delete().eq('id', editingId)
+  if (error) return toast('Could not delete: ' + error.message)
+  tasks = tasks.filter((t) => t.id !== editingId)
+  render()
+  dialog.close()
+}
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault()
-  const saveBtn = document.querySelector('#saveBtn')
-  const title = document.querySelector('#fTitle').value.trim()
+  const saveBtn = $('#saveBtn')
+  const label = saveBtn.textContent
+  const title = $('#fTitle').value.trim()
   if (!title) return
 
-  const todoPositions = tasks.filter((t) => t.status === 'todo').map((t) => t.position)
-  const position = (todoPositions.length ? Math.max(...todoPositions) : 0) + 1000
+  const fields = {
+    title,
+    description: $('#fDesc').value.trim() || null,
+    priority: $('#fPriority').value,
+    due_date: $('#fDue').value || null,
+  }
 
   saveBtn.disabled = true
-  saveBtn.textContent = 'Creating...'
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert({
-      title,
-      description: document.querySelector('#fDesc').value.trim() || null,
-      priority: document.querySelector('#fPriority').value,
-      due_date: document.querySelector('#fDue').value || null,
-      status: 'todo',
-      position,
-    })
-    .select()
-    .single()
+  saveBtn.textContent = 'Saving...'
+  let result
+  if (editingId) {
+    result = await supabase.from('tasks').update(fields).eq('id', editingId).select().single()
+  } else {
+    const todo = tasks.filter((t) => t.status === 'todo').map((t) => t.position)
+    const position = (todo.length ? Math.max(...todo) : 0) + 1000
+    result = await supabase
+      .from('tasks')
+      .insert({ ...fields, status: 'todo', position })
+      .select()
+      .single()
+  }
   saveBtn.disabled = false
-  saveBtn.textContent = 'Create'
+  saveBtn.textContent = label
 
-  if (error) return toast('Could not create task: ' + error.message)
-  tasks.push(data)
+  if (result.error) return toast('Could not save: ' + result.error.message)
+  if (editingId) {
+    tasks = tasks.map((t) => (t.id === editingId ? result.data : t))
+  } else {
+    tasks.push(result.data)
+  }
   render()
   dialog.close()
+})
+
+// ---- Search and filter ----
+$('#search').addEventListener('input', (e) => {
+  filters.q = e.target.value.trim()
+  render()
+})
+$('#filterPriority').addEventListener('change', (e) => {
+  filters.priority = e.target.value
+  render()
 })
 
 // ---- Start ----

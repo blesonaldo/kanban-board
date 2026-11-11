@@ -5,6 +5,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>kanban-board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="app"></div>
@@ -20,40 +22,52 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Taskboard</h1>
+      <h1><span class="logo"></span>Taskboard</h1>
       <button id="newTaskBtn" class="btn">+ New task</button>
     </header>
+   <section class="toolbar">
+   <input id="search" type="search" placeholder="Search tasks..." />
+   <select id="filterPriority">
+    <option value="">All priorities</option>
+    <option value="high">High</option>
+    <option value="normal">Normal</option>
+    <option value="low">Low</option>
+   </select>
+   <div id="stats" class="stats"></div>
+   </section>
 
     <div id="toast" class="toast" hidden></div>
     <main id="board" class="board"></main>
 
     <dialog id="taskDialog">
-      <form id="taskForm" method="dialog">
-        <h2>New task</h2>
-        <label>Title
-          <input id="fTitle" required maxlength="200" placeholder="What needs doing?" />
-        </label>
-        <label>Description
-          <textarea id="fDesc" rows="3" placeholder="Optional details"></textarea>
-        </label>
-        <div class="row">
-          <label>Priority
-            <select id="fPriority">
-              <option value="low">Low</option>
-              <option value="normal" selected>Normal</option>
-              <option value="high">High</option>
-            </select>
-          </label>
-          <label>Due date
-            <input id="fDue" type="date" />
-          </label>
-        </div>
-        <div class="actions">
-          <button type="button" id="cancelBtn" class="btn ghost">Cancel</button>
-          <button type="submit" id="saveBtn" class="btn">Create</button>
-        </div>
-      </form>
-    </dialog>
+  <form id="taskForm" method="dialog">
+    <h2 id="dialogTitle">New task</h2>
+    <label>Title
+      <input id="fTitle" required maxlength="200" placeholder="What needs doing?" />
+    </label>
+    <label>Description
+      <textarea id="fDesc" rows="3" placeholder="Optional details"></textarea>
+    </label>
+    <div class="row">
+      <label>Priority
+        <select id="fPriority">
+          <option value="low">Low</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+      <label>Due date
+        <input id="fDue" type="date" />
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" id="deleteBtn" class="btn danger" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancelBtn" class="btn ghost">Cancel</button>
+      <button type="submit" id="saveBtn" class="btn">Create</button>
+    </div>
+  </form>
+</dialog>
 
     <script type="module" src="/src/main.js"></script>
   </body>
