@@ -116,6 +116,7 @@ function matches(t) {
 }
 
 function renderStats() {
+  $('#seedBtn').hidden = tasks.length > 0
   const total = tasks.length
   const done = tasks.filter((t) => t.status === 'done').length
   const overdue = tasks.filter((t) => dueState(t) === 'overdue').length
@@ -287,7 +288,25 @@ $('#filterPriority').addEventListener('change', (e) => {
   filters.priority = e.target.value
   render()
 })
-
+// ---- Sample tasks ----
+$('#seedBtn').onclick = async () => {
+  const day = (n) => {
+    const x = new Date()
+    x.setDate(x.getDate() + n)
+    return x.toLocaleDateString('en-CA')
+  }
+  const rows = [
+    { title: 'Design the landing page', description: 'Wireframes and color palette', priority: 'high', due_date: day(1), status: 'todo', position: 1000 },
+    { title: 'Write API documentation', description: 'Cover auth and task endpoints', priority: 'normal', due_date: day(5), status: 'todo', position: 2000 },
+    { title: 'Fix login bug', description: 'Guest session not persisting on mobile', priority: 'high', due_date: day(-1), status: 'in_progress', position: 1000 },
+    { title: 'Review pull request', description: null, priority: 'low', due_date: null, status: 'in_review', position: 1000 },
+    { title: 'Set up CI pipeline', description: 'Run build on every push', priority: 'normal', due_date: null, status: 'done', position: 1000 },
+  ]
+  const { data, error } = await supabase.from('tasks').insert(rows).select()
+  if (error) return toast('Could not add samples: ' + error.message)
+  tasks.push(...data)
+  render()
+}
 // ---- Start ----
 async function init() {
   boardEl.innerHTML = '<div class="state">Loading your board...</div>'
