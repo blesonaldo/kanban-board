@@ -80,19 +80,28 @@ function cardEl(t) {
   badge.className = 'badge ' + t.priority
   badge.textContent = t.priority
   meta.append(badge)
+
   if (t.due_date) {
     const state = dueState(t)
+    const today = new Date().toLocaleDateString('en-CA')
+    const prefix =
+      state === 'overdue' ? 'Overdue · '
+      : state === 'soon' && t.due_date === today ? 'Due today · '
+      : state === 'soon' ? 'Due soon · '
+      : 'Due '
+    const pretty = new Date(t.due_date + 'T00:00').toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    })
     const due = document.createElement('span')
     due.className = 'due ' + state
-    due.textContent =
-      (state === 'overdue' ? 'Overdue · ' : state === 'soon' ? 'Due soon · ' : 'Due ') +
-      t.due_date
+    due.textContent = prefix + pretty
     meta.append(due)
   }
+
   card.append(meta)
   return card
 }
-
 // ---- Filters and stats ----
 function matches(t) {
   if (filters.priority && t.priority !== filters.priority) return false
